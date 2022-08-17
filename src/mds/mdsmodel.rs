@@ -25,11 +25,11 @@ pub struct MDSModel{
 
 impl MDSModel{
 
-    pub fn new() -> MDSModel{
+    pub fn new( inputsize: i64, outputsize: i64, ) -> MDSModel{
 
         let vs = nn::VarStore::new(Device::Cpu);
 
-        let mut opt = nn::Adam::default().build(&vs, 1e-3).unwrap();
+        let mut opt = nn::Adam::default().build(&vs, 1e-5).unwrap();
 
         let vs = vs.root();
 
@@ -39,7 +39,7 @@ impl MDSModel{
         let mut layers = nn::seq()
         .add(nn::linear(
             &vs,
-            10,
+            inputsize,
             10,
             Default::default(),
         ))
@@ -48,9 +48,7 @@ impl MDSModel{
         // .add_fn(|xs| xs.relu())
         .add(nn::linear(&vs, 10, 10, Default::default()))
         .add_fn(|xs| xs.relu())
-        .add(nn::linear(&vs, 10, 5, Default::default()))
-        .add_fn(|xs| xs.relu())
-        .add(nn::linear(&vs, 5, 2, Default::default()));
+        .add(nn::linear(&vs, 10, outputsize, Default::default()));
 
         println!("G");
 
@@ -63,8 +61,18 @@ impl MDSModel{
 
 
 
-    pub fn forward(&self, inputvector: Vec<f64>) -> Tensor{
+    // pub fn set_lr(&mut self, lr: f64){
+    //     self.opt.set_lr( lr );
+    // }
 
+    pub fn tensor_forward(&self, tensor: &Tensor) -> Tensor{
+
+        let prediction = self.layers.forward(tensor);
+
+        return prediction;
+    }
+
+    pub fn forward(&self, inputvector: Vec<f64>) -> Tensor{
 
         //println!("C");
         let user_input = Tensor::f_of_slice( &inputvector ).unwrap().to_kind( Kind::Float );
@@ -82,22 +90,18 @@ impl MDSModel{
 
 
     //user, item, rating
-    pub fn train_step(&mut self, input: Vec<f64>, target: (f64, f64) ) {
-
+    pub fn train_step(&mut self, input: Vec<f64>, target: Vec<f64> ) {
 
         //println!("A");
         let differencetensor = self.forward( input );
 
-        let label = Tensor::f_of_slice( &[target.0, target.1] ).unwrap();//.to_kind( Kind::Float );
+        let label = Tensor::f_of_slice( &target ).unwrap().to_kind( Kind::Float );
 
-        let loss = differencetensor.f_l1_loss( &label, tch::Reduction::Mean ).unwrap();
-
+        let loss = differencetensor.f_mse_loss( &label, tch::Reduction::Mean ).unwrap();
 
         self.opt.backward_step( &loss );
 
         //println!("B");
-
-
     }
 
 
@@ -107,85 +111,85 @@ impl MDSModel{
 
 
 
-pub fn normalize<T>( ratings: Vec<(T, f64)>) ->  Vec<(T, f64)>{
+// pub fn normalize<T>( ratings: Vec<(T, f64)>) ->  Vec<(T, f64)>{
 
-    if ratings.len() == 0{
-        return Vec::new();
-    }
+//     if ratings.len() == 0{
+//         return Vec::new();
+//     }
 
 
-    let totalratings = ratings.len();
+//     let totalratings = ratings.len();
 
-    let mut ratingsorder = Vec::new();
+//     let mut ratingsorder = Vec::new();
 
-    for (index, rating) in ratings{
-        ratingsorder.push(  (index, rating) );
-    }
+//     for (index, rating) in ratings{
+//         ratingsorder.push(  (index, rating) );
+//     }
     
-    ratingsorder.sort_by(|(_, ratinga), (_, ratingb)|   ratingb.partial_cmp( ratinga ).unwrap() );
+//     ratingsorder.sort_by(|(_, ratinga), (_, ratingb)|   ratingb.partial_cmp( ratinga ).unwrap() );
     
 
 
-    let mut ratingsgroups: Vec<Vec<T>> = Vec::new();
+//     let mut ratingsgroups: Vec<Vec<T>> = Vec::new();
 
-    let mut currentgrouprating = ratingsorder[0].1;
+//     let mut currentgrouprating = ratingsorder[0].1;
 
-    let mut currentgroup = Vec::new();
+//     let mut currentgroup = Vec::new();
 
-    for (movie, rating) in ratingsorder{
+//     for (movie, rating) in ratingsorder{
 
-        currentgroup.push( movie );
+//         currentgroup.push( movie );
 
-        if rating != currentgrouprating{
-            currentgrouprating = rating;
+//         if rating != currentgrouprating{
+//             currentgrouprating = rating;
 
-            let temp = currentgroup;
-            currentgroup = Vec::new();
-            ratingsgroups.push( temp );
-        }
+//             let temp = currentgroup;
+//             currentgroup = Vec::new();
+//             ratingsgroups.push( temp );
+//         }
 
-    }
+//     }
 
-    //this is sorted from highest group to lowest group
-    ratingsgroups.push(  currentgroup );
-
-
-    //println!("Ratings order{:?}", ratingsgroups);
-    let mut toreturn: Vec<(T, f64)> = Vec::new();
-
-    let mut currentscore = 0.5;
+//     //this is sorted from highest group to lowest group
+//     ratingsgroups.push(  currentgroup );
 
 
-    for ratingsgroup in ratingsgroups{
+//     //println!("Ratings order{:?}", ratingsgroups);
+//     let mut toreturn: Vec<(T, f64)> = Vec::new();
 
-        //how many total ratings are there
-        //from the range of -0.5 to 0.5
-        let ratingsgroupsize = ratingsgroup.len();
-
-        //how much of the -1.0 to 1.0 does this take up
-        let sizepercentage = ratingsgroupsize as f64 / totalratings as f64;
-
-        let grouprating = currentscore - (sizepercentage / 2.0);
-
-        for index in ratingsgroup{
-            toreturn.push( (index, (grouprating ) * 10.0 ) );
-        }
-
-        currentscore = currentscore - sizepercentage;
-
-    }
+//     let mut currentscore = 0.5;
 
 
-    /*
-    let mut totalrating = 0.0;
-    for (_, rating) in &toreturn{
-        totalrating += rating;
-    }
-    println!("average rating {:?}", totalrating / toreturn.len() as f64);
-    This correctly prints "0.00000124123"
-    */
+//     for ratingsgroup in ratingsgroups{
+
+//         //how many total ratings are there
+//         //from the range of -0.5 to 0.5
+//         let ratingsgroupsize = ratingsgroup.len();
+
+//         //how much of the -1.0 to 1.0 does this take up
+//         let sizepercentage = ratingsgroupsize as f64 / totalratings as f64;
+
+//         let grouprating = currentscore - (sizepercentage / 2.0);
+
+//         for index in ratingsgroup{
+//             toreturn.push( (index, (grouprating ) * 10.0 ) );
+//         }
+
+//         currentscore = currentscore - sizepercentage;
+
+//     }
 
 
-    return toreturn;
-}
+//     /*
+//     let mut totalrating = 0.0;
+//     for (_, rating) in &toreturn{
+//         totalrating += rating;
+//     }
+//     println!("average rating {:?}", totalrating / toreturn.len() as f64);
+//     This correctly prints "0.00000124123"
+//     */
+
+
+//     return toreturn;
+// }
 

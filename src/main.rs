@@ -22,14 +22,172 @@ mod ratingprediction;
 mod mds;
 
 pub fn main(){
-    let embeddings: HashMap<u32, Vec<f64>> = crate::readfromfile::rdd_to_embedding().into_iter().collect();
+    //let embeddings: HashMap<u32, Vec<f64>> = crate::readfromfile::rdd_to_embedding().into_iter().collect();
+    //mds::majorize( embeddings );
 
-    mds::majorize( embeddings );
+    mds::differencemdsmodel::DifferenceMDSModel::new( 100, 10, 2 );
+
+
+
+
+    panic!("done");
+
+
+
+    let mut x = vec![
+        0.0,4.0,3.0,7.0,
+        4.0,0.0,1.0,6.0,
+        3.0,1.0,0.0,5.0,
+        7.0,6.0,5.0,0.0,];
+
+        // let mut x = vec![
+        //     0.0,4.0,3.0,7.0,8.0,
+        //     4.0,0.0,1.0,6.0,7.0,
+        //     3.0,1.0,0.0,5.0,7.0,
+        //     7.0,6.0,5.0,0.0,1.0,
+        //     8.0,7.0,7.0,1.0,0.0];
+
+    let mut matrix = Vec::new();
+
+    for o in 0..4{
+        let mut curvec = Vec::new();
+        for y in 0..4{
+            curvec.push( x.remove(0) );
+        }
+        matrix.push( curvec );
+    }
+
+    //println!("{:?}", matrix);
+
+    let factors = 2;
+
+
+    difference_majorize(matrix, factors);
+}
+
+
+use nalgebra::geometry::Point;
+use nalgebra::geometry::OPoint;
+use nalgebra::Vector1;
+use rand::Rng;
+use nalgebra::base::dimension::Const;
+
+pub fn gradient_majorize<D, F: Fn(D,D) -> f32 >( items: HashMap<u32, D>, itemcomparison: F, factors: usize) {
+
+
+
+    //let factorsize = Const::from( 10 );
+
+
+    let mut positions : HashMap<u32, Point<f64, 10> > = items.iter().map(| (baseid, _) |{ 
+        //a vector of 10 with random values between 0 and 1
+        let mut vec = Vec::new();
+        for i in 0..10{
+            vec.push(   rand::thread_rng().gen::<f64>()   );
+        }
+        let position = Point::<f64, 10>::from_slice( &vec  );
+        (*baseid, position)  }
+    ).collect();
+
+
+
+    //a list of embeddings
+
+    //get the gradient
+
+
+
+
+
 }
 
 
 
+use std::collections::HashSet;
 
+
+// //get the stress value change from going X from the left to right
+// fn get_gradient( positionsanddifference: &HashMap<u32, (Point<f64, 10>, f32)>, targetpoint: &u32 ) -> Vector1<f64>{
+
+//     let (targetembedding, targetposition) = positionsanddifference.get(targetpoint).unwrap();
+
+
+//     for (id, (position, difference) ) in positionsanddifference{
+
+//         let force = get_target_force( otherpointposition, targetposition, idealdistance);
+
+
+
+//     }
+
+//     //println!("Sample baseids{:?}", samplebaseids.len() );
+
+//     //the list of forces each of the sample points has on the target one
+//     let mut forces = Vec::new();
+
+//     for baseid in samplebaseids{
+
+//         let otherpointposition = positions.get(&baseid).unwrap();
+//         let otherpointembedding = embeddings.get(&baseid).unwrap();
+
+//         let idealdistance = get_ideal_distance(targetembedding, otherpointembedding);
+
+//         let force = get_target_force( otherpointposition, targetposition, idealdistance);
+
+//         forces.push( force );
+//     }
+
+//     let mut sumforce = Vector2::new(0.0, 0.0);
+
+//     for force in &forces{
+//         sumforce += force;
+//     }
+
+//     let averageforce = sumforce / (forces.len() as f64);
+
+
+//     let averageforce = averageforce * 0.0005;
+
+//     return averageforce;
+// }
+
+
+
+
+
+
+// pub fn get_target_force( emittingpoint: &Point<f64, 10>,  curpoint: &Point<f64, 10>, idealdistance: f64 ) -> Vector1<f64>{
+
+//     //from emittingpoint to targetpoint
+//     let mut tocurpoint = (curpoint - emittingpoint).normalize();
+
+//     let emittingpoint = Vector1::new( emittingpoint.x, emittingpoint.y );
+//     let curpoint = Vector1::new( curpoint.x, curpoint.y );
+
+//     let targetposition = emittingpoint + tocurpoint * idealdistance;
+
+//     let mut force = targetposition - curpoint;
+
+
+//     let force = force * force.magnitude();
+
+//     return force;
+// }
+
+
+mod differencemajorize;
+
+pub use differencemajorize::difference_majorize;
+
+
+
+
+// import numpy as np
+// from scipy import linalg as LA
+// D = np.array([[0,4,3,7,8],[4,0,1,6,7],[3,1,0,5,7],[7,6,5,0,1],[8,7,7,1,0]])
+// D2 = np.square(D)
+// print(D)
+// print(D2)
 
 
 

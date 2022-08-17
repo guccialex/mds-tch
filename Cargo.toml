@@ -17,11 +17,16 @@ serde_json = "*"
 #bincode = "*"
 #serde_cbor = "0.11.2"
 
-tch = "0.7.2"
+tch = "0.8.0"
+
+
 anyhow = "*"
 
 nalgebra = "0.31.1"
 
+ndarray = "*"
+#ndarray-linalg = { version = "*", features = ["intel-mkl-static"] }
+#ndarray-linalg = "*"
 
 #many-to-many = { version = "0.1.3", features = ["serde"] }
 
