@@ -29,7 +29,7 @@ impl MDSModel{
 
         let vs = nn::VarStore::new(Device::Cpu);
 
-        let mut opt = nn::Adam::default().build(&vs, 1e-5).unwrap();
+        let mut opt = nn::Adam::default().build(&vs, 1e-4).unwrap();
 
         let vs = vs.root();
 
@@ -43,12 +43,15 @@ impl MDSModel{
             10,
             Default::default(),
         ))
+        .add(nn::linear(&vs, 10, 7, Default::default()))
         .add_fn(|xs| xs.relu())
-        // .add(nn::linear(&vs, 20, 20, Default::default()))
+        .add(nn::linear(&vs, 7, 5, Default::default()))
+        .add_fn(|xs| xs.relu())
+        .add(nn::linear(&vs, 5, outputsize, Default::default()));
+        // // .add_fn(|xs| xs.relu())
+        // .add(nn::linear(&vs, 10, 10, Default::default()))
         // .add_fn(|xs| xs.relu())
-        .add(nn::linear(&vs, 10, 10, Default::default()))
-        .add_fn(|xs| xs.relu())
-        .add(nn::linear(&vs, 10, outputsize, Default::default()));
+        // .add(nn::linear(&vs, 10, outputsize, Default::default()));
 
         println!("G");
 

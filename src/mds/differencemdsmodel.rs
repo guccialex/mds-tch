@@ -37,7 +37,7 @@ impl DifferenceMDSModel{
         //let mut opt = nn::Adam::default().build(&vs, 1e-3).unwrap();
 
         let layervs = nn::VarStore::new(Device::Cpu);
-        let layeropt = nn::Adam::default().build(&layervs, 1e-3).unwrap();
+        let layeropt = nn::Adam::default().build(&layervs, 1e-4).unwrap();
 
         
         let layers = nn::seq()

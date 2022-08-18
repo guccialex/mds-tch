@@ -14,78 +14,75 @@ use nalgebra::base::UnitVector2;
 
 pub mod differencemdsmodel;
 pub use differencemdsmodel::DifferenceMDSModel;
-
-
 pub use mdsmodel::MDSModel;
 
 
-
-fn vector_distance( user1: &Vec<f64>, user2: &Vec<f64>) -> f64{
+fn get_ideal_distance( user1: &Vec<f64>, user2: &Vec<f64>) -> f64{
     let mut distance = 0.0;
 
+    let squared = false;
+
     for i in 0..user1.len(){
-        distance += (user1[i] - user2[i]).abs();
+        if squared{
+            distance += (user1[i] - user2[i]).abs().powi(2);
+        }
+        else{
+            distance += (user1[i] - user2[i]).abs();
+        }
+    }
+
+    if squared{
+        distance = distance.sqrt();
     }
 
     distance = distance / user1.len() as f64;
+    distance = distance.powi(2);
+
+    if ! distance.is_finite(){
+        println!("distance is wrong {:?}, {:?}, {:?}", user1, user2, distance);
+        panic!("wrong");
+    }
 
     return distance;
 }
 
 
-pub fn get_ideal_distance( first: &Vec<f64>, second: &Vec<f64>) -> f64{
-
-    return vector_distance(first, second);
-
-    // let mut totaldifference = 0.0;
-    // let mut numberdiff = 0;
-    
-    // for index in 0..first.len(){
-
-    //     let this = first[index];
-    //     let that = second[index];
-
-    //     let curdiff = (this - that).abs();
-    //     let curdiff = curdiff;
-
-    //     totaldifference += curdiff;
-    //     numberdiff += 1;
-    // }
-
-    // let toreturn = 0.001 + totaldifference as f64 / numberdiff as f64;
-
-    // //println!("{}, {}, {}, {:?}, {:?}", totaldifference, numberdiff, toreturn, first, second);
-    
-    // if toreturn.is_finite(){
-    //     return toreturn;
-    // }
-    // else{
-    //     panic!("done" );
-    // }
-
-}
-
 
 pub fn get_target_force( emittingpoint: &DVector<f64>,  curpoint: &DVector<f64>, idealdistance: f64 ) -> DVector<f64>{
 
     //from emittingpoint to targetpoint
-    let mut tocurpoint = (curpoint - emittingpoint).normalize();
+    let tocurpoint = (curpoint - emittingpoint).normalize();
 
     //let emittingpoint = Vector2::new( emittingpoint.x, emittingpoint.y );
     //let curpoint = Vector2::new( curpoint.x, curpoint.y );
 
     let targetposition = emittingpoint + tocurpoint * idealdistance;
 
-    let mut force = targetposition - curpoint;
+    let force = targetposition - curpoint;
 
     // if force.magnitude() > 10.{
     //     force = force.normalize() * 10.;
     // }
-    // let force = force.normalize() * 0.002;
 
-    let force = force * force.magnitude();
+    //let force = force.normalize();
 
-    return force;
+    if ! force.magnitude().is_finite(){
+        //println!("force is wrong {:?}, {:?}, {:?}", emittingpoint, curpoint, force);
+        //this happens when curpoint == emittingpoint
+        //so return that, a zero force
+        return curpoint - emittingpoint;
+        //panic!("wrong");
+    }
+
+
+    let force = force.clone();// * force.magnitude();
+
+
+    // if ! force.magnitude().is_finite(){
+    //     println!("wtf, {:?}, {:?}, {:?}", force, emittingpoint, curpoint);
+    // }
+
+    return force.clone();
 }
 
 
@@ -93,21 +90,39 @@ use std::collections::HashSet;
 
 
 //get the stress value change from going X from the left to right
-fn get_gradient<K: Hash+Eq>( positionandembedding: &HashMap<K, (DVector<f64>, Vec<f64>) >, targetpoint: &K ) -> DVector<f64>{
+fn get_gradient<K: Hash+Eq+Clone>( positionandembedding: &HashMap<K, (DVector<f64>, Vec<f64>) >, targetpoint: &K ) -> DVector<f64>{
 
     let (targetposition, targetembedding) = positionandembedding.get(targetpoint).unwrap();
 
+    let numberofsamples = 2000;
+    let totalitems = positionandembedding.len();
+
     //get 1000 random points in the positions map
     let samplebaseids = {
+
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+
         let mut toreturn = HashSet::new();
         //let mut numbersamples = 1000;
         positionandembedding.keys().for_each( |id| {
             if id != targetpoint{
-                toreturn.insert( *id );
+
+                //random number between 0 and totalitems
+                let randomid = rng.gen_range(0, totalitems);
+                if randomid <= numberofsamples{
+                    toreturn.insert( id.clone() );
+                }
             }
         } );
         toreturn
     };
+
+    if samplebaseids.len() == 0{
+        panic!("zero samplebaseid");
+    }
+
+    let samplebaseidlen = samplebaseids.len() as f64;
 
 
     //the list of forces each of the sample points has on the target one
@@ -125,13 +140,44 @@ fn get_gradient<K: Hash+Eq>( positionandembedding: &HashMap<K, (DVector<f64>, Ve
     }
 
 
-    let averageforce = forcesum / (samplebaseids.len() as f64);
 
-    let averageforce = averageforce * 0.005;
+    let averageforce = forcesum / samplebaseidlen;
+
+    //let averageforce = averageforce.normalize();
+
+    //0.01 seems good
+    //well, lower seems better the more items are added. hmmm
+    let mut averageforce = averageforce * 0.002;
+
+
+    // if averageforce.magnitude().is_finite(){
+    //     return averageforce;
+    // }
+    // else{
+    //     return averageforce.normalize() * 0.00001;
+    // }
+    // if averageforce.magnitude() > 0.1{
+    //     averageforce = averageforce.normalize() * 0.1;
+    // }
 
     return averageforce;
 }
 
+
+pub fn set_positions_according_to_model<K: Hash+Eq+Clone>(positionandembedding: &mut HashMap<K, (DVector<f64>, Vec<f64>) >, model: &mut MDSModel){
+
+    for (_, (position, embedding)) in positionandembedding.iter_mut(){
+
+        let newposition = model.forward( embedding.clone() );
+        let newposition = DVector::from_vec( Vec::<f64>::from( newposition ) );
+
+        if ! newposition.magnitude().is_finite(){
+            panic!("wtf {:?}", newposition);
+        }
+        
+        *position = newposition;
+    }
+}
 
 
 mod mdsmodel;
@@ -140,7 +186,7 @@ use nalgebra::Point;
 use nalgebra::DVector;
 
 
-pub fn majorize<K: Hash+Eq>(  embeddings: HashMap<K, Vec<f64>>, outputsize: u32) -> HashMap<K, Vec<f32>>{
+pub fn majorize<K: Hash+Eq+Clone>(  embeddings: HashMap<K, Vec<f64>>, outputsize: u32) -> HashMap<K, Vec<f32>>{
 
     use rand::Rng;
     let mut rng = rand::thread_rng();
@@ -163,27 +209,70 @@ pub fn majorize<K: Hash+Eq>(  embeddings: HashMap<K, Vec<f64>>, outputsize: u32)
     }
     
 
+    let mut counter = 0;
 
-    for _ in 0..10{
+    for _ in 0..15{
 
         print_stress(&positionandembedding );
 
-        for (baseid, (position, embedding) ) in positionandembedding.iter_mut(){
+        let mut averagegradient = 0.0;
+        let mut numbergradient = 0;
 
-            let newposition = model.forward( embedding.clone() );
-            let newposition = DVector::from_vec( Vec::<f64>::from( newposition ) );
-
-            *position = newposition;
-    
-            let gradient = get_gradient(&positionandembedding, &baseid);
-            //let gradient = gradient.1 / 500.0 ;
-
-            let targetposition = *position + gradient;
-            model.train_step( embedding.clone(), targetposition.iter().map(|x|{ *x  }).collect() );
+        //have to do that to the keys to iterate over the keys without borrowing them also
+        for baseid in positionandembedding.keys().map(|k|{k.clone()}).collect::<Vec<K>>().into_iter(){
 
 
-            positions.insert( *baseid, targetposition );
+            let neural = true;
+
+            if neural {
+
+                if counter % 4000 == 0{
+                    set_positions_according_to_model( &mut positionandembedding, &mut model);
+                }
+                counter += 1;
+
+
+
+                let (_, embedding) = positionandembedding.get(&baseid).unwrap().clone();
+                let newposition = model.forward( embedding.clone() );
+                let newposition = DVector::from_vec( Vec::<f64>::from( newposition ) );
+                let x = positionandembedding.get_mut(&baseid).unwrap();
+                x.0 = newposition.clone();
+                
+
+                let (newposition, embedding) = positionandembedding.get(&baseid).unwrap().clone();
+
+
+                let gradient = get_gradient(&positionandembedding, &baseid);
+                averagegradient += gradient.magnitude();
+                numbergradient += 1;
+
+                let targetposition = newposition + gradient;
+
+                model.train_step( embedding.clone(), targetposition.iter().map(|x|{ *x  }).collect() );
+
+                // let newposition = model.forward( embedding.clone() );
+                // let newposition = DVector::from_vec( Vec::<f64>::from( newposition ) );
+                // let x = positionandembedding.get_mut(&baseid).unwrap();
+                // x.0 = newposition;
+            }
+            else{
+
+                let (position, _) = positionandembedding.get(&baseid).unwrap().clone();
+
+                let gradient = get_gradient(&positionandembedding, &baseid);
+                averagegradient += gradient.magnitude();
+                numbergradient += 1;
+
+                let targetposition = position + gradient;
+                
+                positionandembedding.get_mut(&baseid).unwrap().0 = targetposition;
+            }
+
         }
+
+        averagegradient = averagegradient / numbergradient as f64;
+        println!("average gradient {}", averagegradient);
 
         // if totalstress < 0.00022{
         //     let towrite: HashMap<u32, (f64,f64)> = embeddings.iter().map(|(basid,embedding)|{    
@@ -197,13 +286,11 @@ pub fn majorize<K: Hash+Eq>(  embeddings: HashMap<K, Vec<f64>>, outputsize: u32)
         // }
     }
 
-    print_stress(&positions, &embeddings);
+    print_stress(&positionandembedding);
 
-    let mut toreturn = HashMap::new();
-
-    for position in positions{
-        toreturn.insert( position.0, (position.1.x as f32, position.1.y as f32) );
-    }
+    let mut toreturn = positionandembedding.into_iter().map(|(k, (position, embedding))|{
+        (k, position.iter().map(|x|{ *x as f32 }).collect())
+    }).collect();
 
     return toreturn;
 
@@ -226,13 +313,34 @@ fn print_stress<K: Hash+Eq>( positionandembedding: &HashMap<K, (DVector<f64>, Ve
     let mut numberofcombinations = 0;
 
 
+
     use rand::Rng;
     let mut rng = rand::thread_rng();
+    let numberofsamples = 2000;
+    let totalitems = positionandembedding.len();
+    //get 1000 random points in the positions map
+    let samplebaseids = {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let mut toreturn = HashSet::new();
+        //let mut numbersamples = 1000;
+        positionandembedding.keys().for_each( |id| {
+            //random number between 0 and totalitems
+            let randomid = rng.gen_range(0, totalitems);
+            if randomid <= numberofsamples{
+                toreturn.insert( id.clone() );
+            }
+        } );
+        toreturn
+    };
 
 
-    for (baseid, (position, embedding)) in &positionandembedding{
 
-        for (otherbaseid, (otherposition, otherembedding)) in &positionandembedding{
+    for baseid in samplebaseids{
+
+        let (position, embedding) = positionandembedding.get(&baseid).unwrap();
+
+        for (otherbaseid, (otherposition, otherembedding)) in positionandembedding{
 
             if baseid != otherbaseid{
 
@@ -241,26 +349,26 @@ fn print_stress<K: Hash+Eq>( positionandembedding: &HashMap<K, (DVector<f64>, Ve
 
                 let actualdistance = (position - otherposition).magnitude();
 
-                if actualdistance.is_finite(){
-                    //println!("actual distance {}", actualdistance);
-                    totalstress += (idealdistance - actualdistance).abs();
-                    totalsquaredstress += (idealdistance - actualdistance).powf(2.0);
-                    numberofcombinations +=1;
-                }
+                //if actualdistance.is_finite(){
+                //println!("actual distance {}", actualdistance);
+                totalstress += (idealdistance - actualdistance).abs();
+                totalsquaredstress += (idealdistance - actualdistance).powf(2.0);
+                numberofcombinations +=1;
+                //}
 
             }
         }
     }
 
 
-    println!("num of combinations: {}", numberofcombinations);
+    //println!("num of combinations: {}", numberofcombinations);
 
 
     let averagestress = totalstress as f64 / numberofcombinations as f64;
-    println!("average stress {}", averagestress);
+    println!("                          average stress {}", averagestress);
 
     let averagesquaredstress = totalsquaredstress as f64 / numberofcombinations as f64;
-    println!("average squared stress {}", averagesquaredstress);
+    println!("        average squared stress {}", averagesquaredstress);
 
 
     return (totalstress as f64 / numberofcombinations as f64);

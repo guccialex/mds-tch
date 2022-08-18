@@ -62,7 +62,7 @@ pub fn main(){
     let factors = 2;
 
 
-    difference_majorize(matrix, factors);
+    //difference_majorize(matrix, factors);
 }
 
 
@@ -175,9 +175,8 @@ use std::collections::HashSet;
 // }
 
 
-mod differencemajorize;
-
-pub use differencemajorize::difference_majorize;
+// mod differencemajorize;
+// pub use differencemajorize::difference_majorize;
 
 
 

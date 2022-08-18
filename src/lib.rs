@@ -19,8 +19,7 @@ mod mds;
 
 pub use mds::majorize;
 
-mod differencemajorize;
-
-pub use differencemajorize::difference_majorize;
+//mod differencemajorize;
+//pub use differencemajorize::difference_majorize;
 
 pub use mds::differencemdsmodel;

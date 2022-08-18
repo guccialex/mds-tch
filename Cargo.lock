@@ -360,7 +360,6 @@ dependencies = [
  "anyhow",
  "csv",
  "nalgebra",
- "ndarray",
  "rand 0.5.6",
  "serde",
  "serde_json",
